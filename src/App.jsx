@@ -25,37 +25,41 @@ const INITIAL_MATCH_DATA = {
 const OFFLINE_PREDICTIONS = [
   {
     delivery: "Wide Yorker outside off-stump. Speed: 141.6 km/h. Seam angled outwards to slide away.",
-    reaction: "Dhoni reaches far across off-stump, drops his shoulders, attempting to slice over backward point.",
-    outcome: "1 run. Slashed hard but intercepted by deep point. Excellent boundary-saving dive.",
-    pressureAnalysis: "Batter Stress: 85%. Chasing 12.5 RRR causes high tension. Bowler maintains upper hand.",
+    batterReaction: "Dhoni reaches far across off-stump, drops his shoulders, attempting to slice over backward point.",
+    outcome: "SINGLE",
+    confidence: 85,
     tacticalInsight: "Bumrah successfully executed the wide line. Keeping the ball out of Dhoni's hitting arc prevents straight clearing.",
+    probabilities: { six: 5, four: 10, double: 15, single: 40, dot: 25, wicket: 5 },
     winProbability: 42,
     highlights: ['point', 'deep_point', 'deep_cover']
   },
   {
     delivery: "Fast, dipping Yorker on middle-and-leg stump. Speed: 144.2 km/h. Tailing in late.",
-    reaction: "Dhoni clears his front leg, drops his back knee, and whips a powerful helicopter shot through mid-wicket.",
-    outcome: "6 runs! Over deep mid-wicket boundary by 15 meters. Striker exposes bowler's length.",
-    pressureAnalysis: "Bowler Stress: 90%. Straight yorkers are high-risk against Dhoni. Crowd roaring makes it intense.",
+    batterReaction: "Dhoni clears his front leg, drops his back knee, and whips a powerful helicopter shot through mid-wicket.",
+    outcome: "SIX",
+    confidence: 72,
     tacticalInsight: "Straight full lines are highly dangerous. Dhoni's wrist power clears straight boundaries easily. Shift to wide yorker.",
+    probabilities: { six: 35, four: 20, double: 10, single: 15, dot: 15, wicket: 5 },
     winProbability: 60,
     highlights: ['deep_mid_wicket', 'long_on']
   },
   {
     delivery: "Slower Off-Cutter, back of a length. Speed: 121.5 km/h. Heavy off-break turn off pitch.",
-    reaction: "Dhoni is deceived by speed change. Pauses pull trigger, hitting it off the toe of the bat.",
-    outcome: "Dot ball. Pulled hit bounces short of mid-wicket fielder. Batter showing timing frustration.",
-    pressureAnalysis: "Batter Stress: 92%. RRR ticks up. Bowler regains confidence. Heavy single choke.",
+    batterReaction: "Dhoni is deceived by speed change. Pauses pull trigger, hitting it off the toe of the bat.",
+    outcome: "DOT BALL",
+    confidence: 90,
     tacticalInsight: "Pace variations are highly effective on this dry track. Speed adjustments throw off Dhoni's downswing timing.",
+    probabilities: { six: 5, four: 5, double: 10, single: 15, dot: 55, wicket: 10 },
     winProbability: 35,
     highlights: ['mid_wicket', 'square_leg']
   },
   {
-    delivery: "Steep ribcage Bouncer. Speed: 139.8 km/h. Angling direct at the batter's left shoulder.",
-    reaction: "Dhoni pivots on back foot, hands high to hook over the fine-leg boundary fence.",
-    outcome: "4 runs. Top edge flies fine of deep fine leg. Lucky boundary over first slip.",
-    pressureAnalysis: "Match Tension: CRITICAL. Boundary eases pressure slightly for chasers. Bowler under stress.",
-    tacticalInsight: "Short boundaries on the leg side make bouncers highly risky. Stick to full, off-stump channels.",
+    delivery: "Steep ribcage Bouncer. Speed: 139.8 km/h. Direct angling trajectory at the body.",
+    batterReaction: "Dhoni pivots on back foot, hands high to hook over the leg side.",
+    outcome: "FOUR",
+    confidence: 80,
+    tacticalInsight: "Short boundary on the leg side makes bouncers a high-risk tactic here. Bumrah should stick to full wide lines to limit the run rate.",
+    probabilities: { six: 15, four: 30, double: 10, single: 15, dot: 20, wicket: 10 },
     winProbability: 50,
     highlights: ['fine_leg', 'deep_third_man']
   }
@@ -93,8 +97,9 @@ export default function App() {
     delivery: '',
     batterReaction: '',
     outcome: '',
-    pressureAnalysis: '',
+    confidence: 0,
     tacticalInsight: '',
+    probabilities: null,
     isPredicting: false,
   });
 
@@ -135,7 +140,7 @@ export default function App() {
     setPrediction((prev) => ({ ...prev, isPredicting: true }));
     setApiError(null);
 
-    const matchPrompt = `You are CricMind AI, an elite IPL strategist and veteran tactical director. Analyze this death-overs T20 situation:
+    const matchPrompt = `You are CricMind AI, an elite IPL strategist and veteran tactical director. Analyze this death-overs T20 match context:
 Match Telemetry:
 - Batting Team: ${matchData.battingTeam} (CSK striker end)
 - Bowling Team: ${matchData.bowlingTeam}
@@ -145,7 +150,7 @@ Match Telemetry:
 - Bowler: ${matchData.bowler} (Stats: ${matchData.bowlerStats})
 - Batter: ${matchData.batter} (Stats: ${matchData.batterStats})
 
-Provide a highly technical next-ball prediction. Use advanced cricket vocabulary (e.g. 'back-of-the-hand slower cutter', 'cramping the batsman on the ribcage', 'clearing the front leg', 'helicopter swing', 'crease depth adjustments'). You MUST respond with a raw JSON object matching the requested schema.`;
+Provide a highly technical next-ball prediction. You MUST respond with a raw JSON object matching the requested schema. Ensure the predicted outcome is EXACTLY one of these six tokens: "SIX", "FOUR", "DOUBLE", "SINGLE", "DOT BALL", "WICKET". Generate a full probability percentage breakdown (six, four, double, single, dot, wicket) representing the likelihood weightings of each event (make sure they sum to roughly 100%).`;
 
     try {
       const response = await fetch(
@@ -168,17 +173,29 @@ Provide a highly technical next-ball prediction. Use advanced cricket vocabulary
                 properties: {
                   delivery: { type: 'STRING', description: 'Most likely next delivery type (seam angle, release path, speed in km/h).' },
                   reaction: { type: 'STRING', description: 'Striking batter biomechanical adjustment and intent.' },
-                  outcome: { type: 'STRING', description: 'Outcome of the delivery (runs, wickets, boundaries).' },
-                  pressure: { type: 'STRING', description: 'Psychological leverage analysis and stress meters.' },
+                  outcome: { type: 'STRING', description: 'Outcome token. MUST be exactly one of: "SIX", "FOUR", "SINGLE", "DOUBLE", "DOT BALL", "WICKET".' },
+                  confidence: { type: 'INTEGER', description: 'Confidence index percentage of this outcome (1 to 100).' },
                   insight: { type: 'STRING', description: 'Deep tactical bowler vs batter matchup logic.' },
-                  winProbability: { type: 'INTEGER', description: "Current win probability percentage (1 to 100) of the striking/batting team." },
+                  winProbability: { type: 'INTEGER', description: 'Win probability percentage (1 to 100) of the batting team.' },
+                  probabilities: {
+                    type: 'OBJECT',
+                    properties: {
+                      six: { type: 'INTEGER', description: 'Probability percentage of a SIX (1-100)' },
+                      four: { type: 'INTEGER', description: 'Probability percentage of a FOUR (1-100)' },
+                      double: { type: 'INTEGER', description: 'Probability percentage of a DOUBLE (1-100)' },
+                      single: { type: 'INTEGER', description: 'Probability percentage of a SINGLE (1-100)' },
+                      dot: { type: 'INTEGER', description: 'Probability percentage of a DOT BALL (1-100)' },
+                      wicket: { type: 'INTEGER', description: 'Probability percentage of a WICKET (1-100)' }
+                    },
+                    required: ['six', 'four', 'double', 'single', 'dot', 'wicket']
+                  },
                   fieldHighlights: {
                     type: 'ARRAY',
                     items: { type: 'STRING' },
                     description: "List of 2 to 4 fielder IDs to highlight. Choose from: 'long_on', 'long_off', 'deep_mid_wicket', 'deep_backward_square', 'deep_cover', 'deep_point', 'deep_third_man', 'fine_leg', 'mid_wicket', 'extra_cover', 'point', 'slip_1', 'slip_2', 'mid_off', 'mid_on', 'square_leg'"
                   }
                 },
-                required: ['delivery', 'reaction', 'outcome', 'pressure', 'insight', 'winProbability', 'fieldHighlights']
+                required: ['delivery', 'reaction', 'outcome', 'confidence', 'insight', 'winProbability', 'probabilities', 'fieldHighlights']
               }
             }
           })
@@ -203,8 +220,9 @@ Provide a highly technical next-ball prediction. Use advanced cricket vocabulary
         delivery: parsedJSON.delivery,
         batterReaction: parsedJSON.reaction,
         outcome: parsedJSON.outcome,
-        pressureAnalysis: parsedJSON.pressure,
+        confidence: parsedJSON.confidence || 75,
         tacticalInsight: parsedJSON.insight,
+        probabilities: parsedJSON.probabilities,
         isPredicting: false,
       });
 
@@ -217,25 +235,29 @@ Provide a highly technical next-ball prediction. Use advanced cricket vocabulary
         setHighlightedFields(parsedJSON.fieldHighlights);
       }
 
-      // Progress Match State
+      // Progress Match State based on strict outcome
       setMatchData((prev) => {
         const nextOver = parseFloat((parseFloat(prev.overs) + 0.1).toFixed(1));
         const updatedBalls = prev.ballsRemaining - 1;
         
         let runsToAdd = 0;
-        const textOutcome = parsedJSON.outcome.toLowerCase();
-        if (textOutcome.includes('6 runs') || textOutcome.includes('six')) runsToAdd = 6;
-        else if (textOutcome.includes('4 runs') || textOutcome.includes('four')) runsToAdd = 4;
-        else if (textOutcome.includes('2 runs') || textOutcome.includes('two')) runsToAdd = 2;
-        else if (textOutcome.includes('1 run') || textOutcome.includes('single')) runsToAdd = 1;
+        let wicketsToAdd = 0;
+        
+        const outStr = parsedJSON.outcome.toUpperCase();
+        if (outStr.includes('SIX')) runsToAdd = 6;
+        else if (outStr.includes('FOUR')) runsToAdd = 4;
+        else if (outStr.includes('DOUBLE')) runsToAdd = 2;
+        else if (outStr.includes('SINGLE')) runsToAdd = 1;
+        else if (outStr.includes('WICKET')) wicketsToAdd = 1;
         
         const [currRuns, currWickets] = prev.score.split('/').map(Number);
         const nextRuns = currRuns + runsToAdd;
+        const nextWickets = currWickets + wicketsToAdd;
         const nextNeeded = Math.max(0, prev.runsNeeded - runsToAdd);
         
         return {
           ...prev,
-          score: `${nextRuns}/${currWickets}`,
+          score: `${nextRuns}/${nextWickets}`,
           overs: nextOver.toString(),
           ballsRemaining: updatedBalls,
           runsNeeded: nextNeeded.toString(),
@@ -256,31 +278,38 @@ Provide a highly technical next-ball prediction. Use advanced cricket vocabulary
           delivery: scenario.delivery,
           batterReaction: scenario.batterReaction,
           outcome: scenario.outcome,
-          pressureAnalysis: scenario.pressureAnalysis,
+          confidence: scenario.confidence,
           tacticalInsight: scenario.tacticalInsight,
+          probabilities: scenario.probabilities,
           isPredicting: false,
         });
 
         setWinProbability(scenario.winProbability);
         setHighlightedFields(scenario.highlights);
 
-        // Progress Match State
+        // Progress Match State based on offline outcome
         setMatchData((prev) => {
           const nextOver = parseFloat((parseFloat(prev.overs) + 0.1).toFixed(1));
           const updatedBalls = prev.ballsRemaining - 1;
           
           let runsToAdd = 0;
-          if (scenario.outcome.includes("6 runs")) runsToAdd = 6;
-          else if (scenario.outcome.includes("4 runs")) runsToAdd = 4;
-          else if (scenario.outcome.includes("1 run")) runsToAdd = 1;
+          let wicketsToAdd = 0;
+          
+          const outStr = scenario.outcome.toUpperCase();
+          if (outStr.includes('SIX')) runsToAdd = 6;
+          else if (outStr.includes('FOUR')) runsToAdd = 4;
+          else if (outStr.includes('DOUBLE')) runsToAdd = 2;
+          else if (outStr.includes('SINGLE')) runsToAdd = 1;
+          else if (outStr.includes('WICKET')) wicketsToAdd = 1;
           
           const [currRuns, currWickets] = prev.score.split('/').map(Number);
           const nextRuns = currRuns + runsToAdd;
+          const nextWickets = currWickets + wicketsToAdd;
           const nextNeeded = Math.max(0, prev.runsNeeded - runsToAdd);
           
           return {
             ...prev,
-            score: `${nextRuns}/${currWickets}`,
+            score: `${nextRuns}/${nextWickets}`,
             overs: nextOver.toString(),
             ballsRemaining: updatedBalls,
             runsNeeded: nextNeeded.toString(),

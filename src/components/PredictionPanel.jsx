@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Cpu, Zap, Eye, Target, Sparkles, AlertTriangle, Key, ShieldCheck, HelpCircle, RefreshCw, Gauge } from 'lucide-react';
+import { Cpu, Zap, Eye, Target, Sparkles, AlertTriangle, Key, ShieldCheck, HelpCircle, RefreshCw, Gauge, BarChart2 } from 'lucide-react';
 
 export default function PredictionPanel({ prediction, onPredict, apiKey, onSaveApiKey, apiError }) {
-  const { delivery, batterReaction, outcome, pressureAnalysis, tacticalInsight, isPredicting } = prediction;
+  const { delivery, batterReaction, outcome, confidence, tacticalInsight, probabilities, isPredicting } = prediction;
   const [tempKey, setTempKey] = useState('');
   const [showKey, setShowKey] = useState(false);
 
@@ -18,6 +18,20 @@ export default function PredictionPanel({ prediction, onPredict, apiKey, onSaveA
       onSaveApiKey(tempKey.trim());
     }
   };
+
+  // Outcome category styling helpers
+  const getOutcomeStyle = (out) => {
+    if (!out) return 'text-slate-400 border-white/5 bg-slate-900/40';
+    const text = out.toUpperCase();
+    if (text.includes('SIX')) return 'text-sportsYellow border-sportsYellow/30 bg-sportsYellow/10 shadow-[0_0_10px_rgba(255,222,67,0.2)]';
+    if (text.includes('FOUR')) return 'text-sportsGreen border-sportsGreen/30 bg-sportsGreen/10 shadow-[0_0_10px_rgba(0,255,135,0.2)]';
+    if (text.includes('WICKET')) return 'text-red-400 border-red-500/30 bg-red-500/10 shadow-[0_0_10px_rgba(239,68,68,0.2)] animate-pulse';
+    if (text.includes('DOT')) return 'text-slate-300 border-slate-500/20 bg-slate-800/40';
+    return 'text-sportsBlue border-sportsBlue/30 bg-sportsBlue/10 shadow-[0_0_10px_rgba(0,229,255,0.2)]';
+  };
+
+  // Defaults for probability breakdown
+  const defaultProbs = probabilities || { six: 0, four: 0, double: 0, single: 0, dot: 0, wicket: 0 };
 
   return (
     <div className="glass-card rounded-2xl p-5 border border-white/5 relative overflow-hidden select-none">
@@ -174,7 +188,7 @@ export default function PredictionPanel({ prediction, onPredict, apiKey, onSaveA
           </div>
 
           {/* Result Cards Block */}
-          <div className="relative min-h-[220px]">
+          <div className="relative min-h-[220px] mb-8">
             <AnimatePresence mode="wait">
               {isPredicting ? (
                 /* Telemetry Loading Simulator overlay */
@@ -215,7 +229,7 @@ export default function PredictionPanel({ prediction, onPredict, apiKey, onSaveA
               ) : null}
             </AnimatePresence>
 
-            {/* Prediction Results Grid */}
+            {/* Prediction Results Grid (5 cards) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               
               {/* Card 1: Predicted Delivery */}
@@ -258,27 +272,35 @@ export default function PredictionPanel({ prediction, onPredict, apiKey, onSaveA
                 </p>
               </motion.div>
 
-              {/* Card 3: Probable Outcome */}
+              {/* Card 3: Predicted Outcome (Strict outcomes badge) */}
               <motion.div
                 variants={cardVariants}
                 initial="hidden"
                 animate="visible"
-                className="glass-card rounded-xl p-4 border border-white/5 relative hover:border-sportsGreen/20 transition-colors duration-300 shadow-glow-green"
+                className="glass-card rounded-xl p-4 border border-white/5 relative hover:border-sportsGreen/20 transition-colors duration-300"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <div className="p-1 rounded bg-sportsGreen/10 text-sportsGreen">
                     <Zap className="w-3.5 h-3.5" />
                   </div>
                   <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
-                    Probable Outcome
+                    Predicted Outcome
                   </h4>
                 </div>
-                <p className="text-xs text-white font-semibold leading-relaxed min-h-[48px]">
-                  {outcome || 'Computes runs scored, boundary thresholds, or leg-side catches.'}
-                </p>
+                <div className="flex flex-col justify-center min-h-[48px] pt-1">
+                  {outcome ? (
+                    <span className={`inline-block px-3 py-1.5 rounded-lg border text-center font-black text-sm uppercase font-mono tracking-widest ${getOutcomeStyle(outcome)}`}>
+                      {outcome}
+                    </span>
+                  ) : (
+                    <span className="text-xs text-slate-400 font-semibold leading-relaxed">
+                      Calculates the strict play outcome (SIX, FOUR, WICKET, etc.)
+                    </span>
+                  )}
+                </div>
               </motion.div>
 
-              {/* Card 4: Pressure Analysis */}
+              {/* Card 4: Confidence Meter */}
               <motion.div
                 variants={cardVariants}
                 initial="hidden"
@@ -290,33 +312,151 @@ export default function PredictionPanel({ prediction, onPredict, apiKey, onSaveA
                     <Gauge className="w-3.5 h-3.5" />
                   </div>
                   <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
-                    Pressure Analysis
+                    Confidence Meter
                   </h4>
                 </div>
-                <p className="text-xs text-white font-semibold leading-relaxed min-h-[48px]">
-                  {pressureAnalysis || 'Evaluates psychological thresholds and stress-induced errors.'}
-                </p>
+                <div className="flex flex-col gap-2 min-h-[48px] justify-center">
+                  <div className="flex justify-between items-center">
+                    <span className="text-[10px] text-slate-400 font-mono uppercase">AI Certainty</span>
+                    <span className="text-xs font-bold text-white font-mono">{confidence ? `${confidence}%` : '0%'}</span>
+                  </div>
+                  <div className="w-full h-1.5 rounded bg-slate-900 overflow-hidden">
+                    <motion.div
+                      className="h-full bg-gradient-to-r from-sportsBlue to-sportsGreen"
+                      initial={{ width: 0 }}
+                      animate={{ width: confidence ? `${confidence}%` : 0 }}
+                      transition={{ duration: 0.8 }}
+                    />
+                  </div>
+                </div>
               </motion.div>
 
-              {/* Card 5: Tactical Reasoning */}
+              {/* Card 5: Tactical Analysis */}
               <motion.div
                 variants={cardVariants}
                 initial="hidden"
                 animate="visible"
-                className="glass-card rounded-xl p-4 border border-white/5 relative hover:border-sportsBlue/20 transition-colors duration-300 shadow-glow-blue sm:col-span-2 lg:col-span-1"
+                className="glass-card rounded-xl p-4 border border-white/5 relative hover:border-sportsBlue/20 transition-colors duration-300 shadow-glow-blue sm:col-span-2 lg:col-span-2"
               >
                 <div className="flex items-center gap-2 mb-2">
                   <div className="p-1 rounded bg-sportsBlue/10 text-sportsBlue">
                     <AlertTriangle className="w-3.5 h-3.5" />
                   </div>
                   <h4 className="text-[11px] font-extrabold uppercase tracking-wider text-slate-300">
-                    Tactical Reasoning
+                    Tactical Analysis
                   </h4>
                 </div>
                 <p className="text-xs text-white font-semibold leading-relaxed min-h-[48px]">
                   {tacticalInsight || 'Bowler matchups, crease angle variations, and exit strategy adjustments.'}
                 </p>
               </motion.div>
+            </div>
+          </div>
+
+          {/* 3. Probability Breakdown Section */}
+          <div className="glass-card rounded-xl p-5 border border-white/5 relative overflow-hidden">
+            <h3 className="text-xs font-extrabold uppercase tracking-widest text-slate-300 mb-4 flex items-center gap-2 border-b border-white/5 pb-2">
+              <BarChart2 className="w-4 h-4 text-sportsGreen" />
+              Outcome Probability Breakdown
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-5">
+              {/* SIX Bar */}
+              <div className="flex flex-col gap-1.5 bg-slate-950/40 p-3 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-sportsYellow font-bold uppercase tracking-wider">SIX</span>
+                  <span className="text-white font-bold">{defaultProbs.six}%</span>
+                </div>
+                <div className="w-full h-2 rounded bg-slate-900 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-sportsYellow shadow-[0_0_6px_#FFDE43]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${defaultProbs.six}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+
+              {/* FOUR Bar */}
+              <div className="flex flex-col gap-1.5 bg-slate-950/40 p-3 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-sportsGreen font-bold uppercase tracking-wider">FOUR</span>
+                  <span className="text-white font-bold">{defaultProbs.four}%</span>
+                </div>
+                <div className="w-full h-2 rounded bg-slate-900 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-sportsGreen shadow-[0_0_6px_#00FF87]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${defaultProbs.four}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+
+              {/* DOUBLE Bar */}
+              <div className="flex flex-col gap-1.5 bg-slate-950/40 p-3 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-sportsBlue font-bold uppercase tracking-wider">DOUBLE</span>
+                  <span className="text-white font-bold">{defaultProbs.double}%</span>
+                </div>
+                <div className="w-full h-2 rounded bg-slate-900 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-sportsBlue shadow-[0_0_6px_#00E5FF]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${defaultProbs.double}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+
+              {/* SINGLE Bar */}
+              <div className="flex flex-col gap-1.5 bg-slate-950/40 p-3 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-cyan-400 font-bold uppercase tracking-wider">SINGLE</span>
+                  <span className="text-white font-bold">{defaultProbs.single}%</span>
+                </div>
+                <div className="w-full h-2 rounded bg-slate-900 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-cyan-400 shadow-[0_0_6px_rgba(34,211,238,0.6)]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${defaultProbs.single}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+
+              {/* DOT BALL Bar */}
+              <div className="flex flex-col gap-1.5 bg-slate-950/40 p-3 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-slate-400 font-bold uppercase tracking-wider">DOT BALL</span>
+                  <span className="text-white font-bold">{defaultProbs.dot}%</span>
+                </div>
+                <div className="w-full h-2 rounded bg-slate-900 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-slate-500"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${defaultProbs.dot}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+
+              {/* WICKET Bar */}
+              <div className="flex flex-col gap-1.5 bg-slate-950/40 p-3 rounded-lg border border-white/5">
+                <div className="flex justify-between items-center text-[10px] font-mono">
+                  <span className="text-red-400 font-bold uppercase tracking-wider">WICKET</span>
+                  <span className="text-white font-bold">{defaultProbs.wicket}%</span>
+                </div>
+                <div className="w-full h-2 rounded bg-slate-900 overflow-hidden">
+                  <motion.div
+                    className="h-full bg-red-500 shadow-[0_0_6px_#EF4444]"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${defaultProbs.wicket}%` }}
+                    transition={{ duration: 0.8 }}
+                  />
+                </div>
+              </div>
+
             </div>
           </div>
         </>
